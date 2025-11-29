@@ -260,6 +260,16 @@ pub struct TrackedWarning<W: std::error::Error> {
     pub debug_only: bool,
 }
 
+impl<W: Clone + std::error::Error> Clone for TrackedWarning<W> {
+    fn clone(&self) -> TrackedWarning<W> {
+        TrackedWarning {
+            site: self.site,
+            warning: self.warning.clone(),
+            debug_only: self.debug_only,
+        }
+    }
+}
+
 impl<W: std::error::Error> fmt::Display for TrackedWarning<W> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}:{}:{}", self.site.file(), self.site.line(), self.site.column(), self.warning)
@@ -494,6 +504,62 @@ impl<T: fmt::Debug, W: std::error::Error> fmt::Debug for Warnable<T, W> {
     }
 }
 
+impl<T: Clone, W: std::error::Error + Clone, L: Logger<W> + Clone> Clone for Warnable<T, W, L> {
+    fn clone(&self) -> Warnable<T, W, L> {
+        Warnable {
+            warnings: self.warnings.clone(),
+            messages: self.messages.clone(),
+            logger: self.logger.clone(),
+            debug_only: self.debug_only,
+            has_warned: self.has_warned,
+            value: self.value.clone(),
+            filters: self.filters.clone()
+        }
+    }
+}
+
+impl<T, W: std::error::Error + Clone, L: Logger<W>> Warnable<T, W, L> {
+    /// Converts this `Warnable` into a `Result<T, Vec<TrackedWarning<W>>>`,
+    /// applying `allow` and `deny` filters.
+    ///
+    /// - Denied warnings cause an `Err` containing the denied warnings.
+    /// - Allowed warnings are suppressed.
+    /// - Remaining warnings are logged but do not cause `Err`.
+    #[track_caller]
+    pub fn into_result(mut self) -> core::result::Result<T, Vec<TrackedWarning<W>>> {
+        // Mark as already warned to avoid double logging on Drop
+        self.has_warned = true;
+
+        // Take the value out safely
+        let value = unsafe { ManuallyDrop::take(&mut self.value) };
+
+        // Apply filters
+        let filter_result = self.filters.apply(&self.warnings);
+
+        // Log all kept warnings
+        for tracked in filter_result.kept.iter() {
+            self.logger.warn(&tracked.warning, tracked.site);
+        }
+
+        // Log allowed warnings as info (optional)
+        for tracked in filter_result.allowed.iter() {
+            self.logger.info(&tracked.warning, tracked.site);
+        }
+
+        // If any denied warnings exist, return Err
+        let denied = filter_result.denied.clone();
+        let denied_empty = denied.is_empty();
+        if !denied_empty {
+            // Clone the denied warnings into a Vec for returning
+            let denied_vec = denied.into_iter().map(|w| (*w).clone()).collect();
+            return Err(denied_vec);
+        }
+
+        // Everything ok, return value
+        Ok(value)
+    }
+}
+
 impl<T, W: std::error::Error, L: Logger<W> + 'static> Warnable<T, W, L> {
     /// Create a new `Warnable` instance with an optional initial warning.
     ///
@@ -525,14 +591,6 @@ impl<T, W: std::error::Error, L: Logger<W> + 'static> Warnable<T, W, L> {
     /// updates `debug_only` to the given value.
     pub fn set_debug_only(&mut self, debug_only: bool) {
         self.debug_only = debug_only;
-    }
-
-    /// converts this `Warnable` into `std::result::Result` returning  `Result::Err` for any denied warnings. 
-    pub fn into_result(self) -> core::result::Result<T, Vec<TrackedWarning<W>>> {
-        // this makes sense as behavior because `Result` is a stricter type.
-        let value = self.hide();
-        // for now this isn't very exciting, but once deny is implemented, it'll be far more meaningful
-        Ok(value)
     }
 
     /// as it implies returns a list of contained warnings as an immutable slice.

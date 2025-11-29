@@ -6,7 +6,7 @@
 macro_rules! warninit {
     // With explicit type, explicit warning type, and logger
     ($ty:ty, $warn:ty, $logger:expr) => {
-        $crate::Warnable::<Option<$ty>, $warn, L>::new_uninitialized($logger, false)
+        $crate::Warnable::<Option<$ty>, $warn, _>::new_uninitialized($logger, false)
     };
 
     ($ty:ty, $warn:ty) => {
