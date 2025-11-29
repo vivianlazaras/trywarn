@@ -343,6 +343,7 @@ pub struct Warnable<T, W: std::error::Error, L: Logger<W> + 'static = DefaultLog
     value: ManuallyDrop<T>,
     /// Any warnings associated with this value
     warnings: ManuallyDrop<Vec<TrackedWarning<W>>>,
+    messages: ManuallyDrop<Vec<TrackedWarning<W>>>,
     /// Logger used to report warnings
     pub logger: Arc<L>,
     /// Optional debug-only flag; if true, warnings are only logged in debug builds
@@ -503,13 +504,16 @@ impl<T, W: std::error::Error, L: Logger<W> + 'static> Warnable<T, W, L> {
     {
         let site = std::panic::Location::caller();
         let warnings = ManuallyDrop::new(warning.into_iter().map(|warning| TrackedWarning { site, warning, debug_only: false }).collect());
+        let messages = ManuallyDrop::new(Vec::new());
         Self {
             value: ManuallyDrop::new(value),
+            messages,
             warnings,
             logger: Arc::new(logger),
             debug_only: false,
             has_warned: false,
             filters: WarningFilters::new(),
+
         }
     }
 
@@ -882,7 +886,7 @@ impl<T, W: std::error::Error, L: Logger<W>> Warnable<Option<T>, W, L> {
 
         // Take the warnings vector out of ManuallyDrop
         let warnings_vec = unsafe { ManuallyDrop::take(&mut self.warnings) };
-
+        let messages_vec = unsafe { ManuallyDrop::take(&mut self.messages) };
         // Extract the logger (by move)
         let logger = self.logger.clone();
         let filters = self.filters.clone();
@@ -897,6 +901,7 @@ impl<T, W: std::error::Error, L: Logger<W>> Warnable<Option<T>, W, L> {
         Warnable {
             value: ManuallyDrop::new(value),
             warnings: ManuallyDrop::new(warnings_vec),
+            messages: ManuallyDrop::new(messages_vec),
             logger,
             debug_only,
             has_warned: false,
