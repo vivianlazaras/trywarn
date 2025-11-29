@@ -64,9 +64,6 @@ assert_eq!(value, 42);
 ```
 
 ## Future Plans
-1. Implement allow (warning type map for anything that shouldn't become a warning).
-2. Implement deny (any warning that should be treated as a critical error, and thus cause a panic!)
-3. Handle logger trait error handling cleanly.
-4. Move unwrap to flush, implement unwrap as a panic fn.
-5. Implement expect.
-6. Create a separate log mechanic. (perhaps include different log levels, with different associated colors).
+1. Handle logger trait error handling cleanly.
+2. Move unwrap to flush, implement unwrap as a panic fn.
+3. Implement expect.
