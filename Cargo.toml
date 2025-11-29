@@ -1,0 +1,11 @@
+[package]
+name = "trywarn"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+concat-idents = "1.1.5"
+paste = "1.0.15"
+
+[features]
+try = []

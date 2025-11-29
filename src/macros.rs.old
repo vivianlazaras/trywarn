@@ -1,0 +1,274 @@
+
+/// Initializes a warning tracking context in the current scope.
+///
+/// Creates a hidden vector of `TrackedWarning` instances and a debug-only flag for storing
+/// warnings. This macro must be called before using `warn!` or `ret!`.
+///
+/// # Usage
+///
+/// ```rust
+/// use trywarn::{warninit, warn, ret, DefaultWarning, DefaultLogger};
+///
+/// // Use default warning type
+/// warninit!();
+///
+/// warn!("minor warning");
+/// let result = ret!(42);
+///
+/// // Use explicit warning type
+/// warninit!(MyWarningType);
+/// warn!(MyWarningType, MyWarningType::Minor);
+/// let result2 = ret!(MyWarningType, 100);
+/// ```
+///
+/// # Notes
+///
+/// - Multiple `warninit!` calls can exist in the same scope if different types are used.
+/// - Automatically tracks warnings for subsequent `warn!` calls.
+#[macro_export]
+macro_rules! warninit {
+    // Explicit type parameter
+    ($ty:ty) => {
+        ::paste::paste! {
+            // A warnable whose value is None but which can accumulate warnings
+            let mut [<__tracked_warnings_ $ty>]: $crate::Warnable<Option<$ty>> =
+                $crate::Warnable::new_uninitialized($crate::DefaultLogger::default(), false);
+
+            // Debug mode tracking variable
+            let [<__debug_only_ $ty>]: bool = false;
+        }
+    };
+
+    // Explicit type parameter
+    ($ty:ty, $logger:expr) => {
+        ::paste::paste! {
+            // A warnable whose value is None but which can accumulate warnings
+            let mut [<__tracked_warnings_ $ty>]: $crate::Warnable<Option<$ty>> =
+                $crate::Warnable::new_uninitialized($logger, false);
+
+            // Debug mode tracking variable
+            let [<__debug_only_ $ty>]: bool = false;
+        }
+    };
+
+    // No type parameter → use DefaultWarning
+    () => {
+        ::paste::paste! {
+            let mut [<__tracked_warnings_ DefaultWarning>]:
+                $crate::Warnable<Option<$crate::DefaultWarning>> =
+                    $crate::Warnable::new_uninitialized($crate::DefaultLogger::default(), false);
+
+            let [<__debug_only_ DefaultWarning>]: bool = false;
+        }
+    };
+
+    // No type parameter → use DefaultWarning
+    ($logger:expr) => {
+        ::paste::paste! {
+            let mut [<__tracked_warnings_ DefaultWarning>]:
+                $crate::Warnable<Option<$crate::DefaultWarning>> =
+                    $crate::Warnable::new_uninitialized($logger, false);
+
+            let [<__debug_only_ DefaultWarning>]: bool = false;
+        }
+    };
+}
+
+/// Records a warning in the current tracking context.
+///
+/// Pushes a `TrackedWarning` onto the warning vector created by `warninit!`.
+/// Can be called with an explicit warning type or rely on the default type (`DefaultWarning`).
+///
+/// # Usage
+///
+/// ```rust
+/// use trywarn::{warninit, warn, ret, DefaultLogger};
+///
+/// warninit!(); // default warning type
+/// warn!("this is a warning");
+///
+/// // With explicit type
+/// warninit!(MyWarning);
+/// warn!(MyWarning, MyWarning::Minor);
+/// ```
+///
+/// # Notes
+///
+/// - Requires a prior `warninit!` in the same scope.
+/// - Warnings marked as debug-only will only be logged in debug builds.
+#[macro_export]
+macro_rules! warn {
+    // With explicit type
+    ($ty:ty, $warning:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $ty>].warn(
+                $warning
+            );
+        }
+    }};
+
+    // Without type -> use default
+    ($warning:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $crate::DefaultWarning>].warn(
+                $warning
+            );
+        }
+    }};
+}
+
+/// Returns a `Warnable` from the current tracked warnings and a value.
+///
+/// Collects all warnings accumulated by `warninit!` and `warn!` and constructs
+/// a `Warnable` instance containing the provided value. Can optionally take an explicit
+/// warning type and/or a logger.
+///
+/// # Usage
+///
+/// ```rust
+/// use trywarn::{warninit, warn, ret, DefaultLogger, DefaultWarning};
+///
+/// warninit!(); // default warning type
+/// warn!("minor warning");
+/// let w: Warnable<_, _, _> = ret!(42); // uses default warning type and default logger
+///
+/// // With explicit type
+/// warninit!(MyWarning);
+/// warn!(MyWarning, MyWarning::Minor);
+/// let w2 = ret!(MyWarning, 100); // uses default logger
+///
+/// // With explicit type and logger
+/// let logger = DefaultLogger::default();
+/// let w3 = ret!(MyWarning, logger, 200);
+/// ```
+///
+/// # Notes
+///
+/// - Must be called after a `warninit!` in the same scope.
+/// - After calling `ret!`, the tracked warnings are consumed and the warning vector is no longer available.
+/// - Warnings are automatically logged according to the debug-only flag.
+#[macro_export]
+macro_rules! ret {
+
+    // With explicit type
+    ($ty:ty, $value:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $ty>].set_value($value).unoptionize()
+        }
+    }};
+
+    // Without type -> use default
+    ($value:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $ty>].set_value($value).unoptionize()
+        }
+    }};
+
+}
+
+/// Initializes a debug-only warning tracking context in the current scope.
+///
+/// Works similarly to `warninit!` but marks all warnings as debug-only, so
+/// they will only be logged in debug builds.
+///
+/// # Usage
+///
+/// ```rust
+/// use trywarn::{debuginit, warn, ret, DefaultWarning, DefaultLogger};
+///
+/// debuginit!(); // default warning type
+/// warn!("debug-only warning");
+/// let w = ret!(42);
+///
+/// // With explicit type
+/// debuginit!(MyWarning);
+/// warn!(MyWarning, MyWarning::Minor);
+/// let w2 = ret!(MyWarning, 100);
+/// ```
+#[macro_export]
+macro_rules! debuginit {
+    // Explicit type parameter
+    ($ty:ty) => {
+        ::paste::paste! {
+            // A warnable whose value is None but which can accumulate warnings
+            let mut [<__tracked_warnings_ $ty>]: $crate::Warnable<Option<$ty>> =
+                $crate::Warnable::new_uninitialized($crate::DefaultLogger::default(), true);
+
+            // Debug mode tracking variable
+            let [<__debug_only_ $ty>]: bool = true;
+        }
+    };
+
+    // Explicit type parameter
+    ($ty:ty, $logger:expr) => {
+        ::paste::paste! {
+            // A warnable whose value is None but which can accumulate warnings
+            let mut [<__tracked_warnings_ $ty>]: $crate::Warnable<Option<$ty>> =
+                $crate::Warnable::new_uninitialized($logger, true);
+
+            // Debug mode tracking variable
+            let [<__debug_only_ $ty>]: bool = true;
+        }
+    };
+
+    // No type parameter → use DefaultWarning
+    () => {
+        ::paste::paste! {
+            let mut [<__tracked_warnings_ DefaultWarning>]:
+                $crate::Warnable<Option<$crate::DefaultWarning>> =
+                    $crate::Warnable::new_uninitialized($crate::DefaultLogger::default(), true);
+
+            let [<__debug_only_ DefaultWarning>]: bool = true;
+        }
+    };
+
+    // No type parameter → use DefaultWarning
+    ($logger:expr) => {
+        ::paste::paste! {
+            let mut [<__tracked_warnings_ DefaultWarning>]:
+                $crate::Warnable<Option<$crate::DefaultWarning>> =
+                    $crate::Warnable::new_uninitialized($logger, true);
+
+            let [<__debug_only_ DefaultWarning>]: bool = true;
+        }
+    };
+}
+
+/*
+/// Records a debug-only warning in the current tracking context.
+///
+/// Works similarly to `warn!` but uses `TrackedWarning::debug` so that
+/// the warning is only logged in debug builds.
+///
+/// # Usage
+///
+/// ```rust
+/// use trywarn::{debuginit, debugwarn, ret, DefaultLogger};
+///
+/// debuginit!();
+/// debugwarn!("debug-only warning");
+///
+/// // With explicit type
+/// debuginit!(MyWarning);
+/// debugwarn!(MyWarning, MyWarning::Minor);
+/// ```
+#[macro_export]
+macro_rules! debugwarn {
+    // With explicit type
+    ($ty:ty, $warning:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $ty>].warn(
+                $warning
+            );
+        }
+    }};
+
+    // Without type -> use default
+    ($warning:expr) => {{
+        ::paste::paste! {
+            [<__tracked_warnings_ $crate::DefaultWarning>].warn(
+                $warning
+            );
+        }
+    }};
+}*/
