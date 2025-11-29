@@ -15,7 +15,33 @@ Features:
 - Optional manual propagation of warnings via `propagate()` or `unwrap()`.
 - Works with custom logging mechanisms.
 
-### Example
+### Macro Example
+
+```rust
+use trywarn::{warn, warninit, ret};
+use std::fmt;
+
+#[derive(Debug)]
+struct MyWarning(&'static str);
+
+impl fmt::Display for MyWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for MyWarning {}
+
+let mut warning = warninit!(String, MyWarning);
+warn!(warning, MyWarning("hello world"));
+// only shows the warning/info message on debug builds
+info!(warning, MyWarning("Some good info to have"), true);
+let warnable = ret!(warnings, "hello world".to_string());
+// unwraps logging any warnings to StdErr (default logger).
+let message = warnable.unwrap();
+```
+
+### Manual Example
 
 ```rust
 use trywarn::{Warnable, StdErrLogger};

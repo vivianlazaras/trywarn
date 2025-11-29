@@ -50,10 +50,47 @@ macro_rules! warn {
         $warnable.warn($warning);
     }};
 
+    ($warnable:expr, $warning:expr, $dbg:literal) => {{
+        $warnable.dbgwarn($warning, $dbg);
+    }};
+
     // == operator  (warn when false)
     ($warnable:expr, $cond:expr, $warning:expr) => {{
         if !$cond {
             $warnable.warn($warning);
+        }
+    }};
+
+    // == operator  (warn when false)
+    ($warnable:expr, $cond:expr, $warning:expr, $dbg:literal) => {{
+        if !$cond {
+            $warnable.dbgwarn($warning, $dbg);
+        }
+    }};
+}
+
+/// Records a message in a given Warnable
+#[macro_export]
+macro_rules! info {
+    ($warnable:expr, $warning:expr) => {{
+        $warnable.info($warning);
+    }};
+
+    ($warnable:expr, $warning:expr, $dbg:literal) => {{
+        $warnable.dbginfo($warning, $dbg);
+    }};
+
+    // == operator  (warn when false)
+    ($warnable:expr, $cond:expr, $warning:expr) => {{
+        if !$cond {
+            $warnable.info($warning);
+        }
+    }};
+
+    // == operator  (warn when false)
+    ($warnable:expr, $cond:expr, $warning:expr, $dbg:literal) => {{
+        if !$cond {
+            $warnable.dbginfo($warning, $dbg);
         }
     }};
 

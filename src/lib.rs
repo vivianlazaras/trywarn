@@ -195,6 +195,11 @@ pub trait Logger<W: std::error::Error>: Send + Sync {
     fn warn(&self, warning: &W, location: &Location) {
         self.log(warning, location)
     }
+
+    /// different formatting option (such as text color) options for info/log messages that aren't warnings.
+    fn info(&self, warning: &W, location: &Location) {
+        self.log(warning, location)
+    }
 }
 
 /// Represents a warning that has been tracked along with its creation context.
@@ -572,7 +577,14 @@ impl<T, W: std::error::Error, L: Logger<W> + 'static> Warnable<T, W, L> {
             self.has_warned = true;
             if cfg!(debug_assertions) || !self.debug_only {
                 for tracked in self.warnings.iter() {
-                    self.logger.warn(&tracked.warning, tracked.site);
+                    if cfg!(debug_assertions) || !tracked.debug_only {
+                        self.logger.warn(&tracked.warning, tracked.site);
+                    }
+                }
+                for message in self.messages.iter() {
+                    if cfg!(debug_assertions) || !message.debug_only {
+                        self.logger.info(&message.warning, message.site);
+                    }
                 }
             }
         }
@@ -770,9 +782,29 @@ impl<T, W: std::error::Error, L: Logger<W> + 'static> Warnable<T, W, L> {
     /// It only appends to the internal warnings collection.
     #[track_caller]
     pub fn warn(&mut self, warning: impl Into<W>) {
+        self.dbgwarn(warning, self.debug_only)
+    }
+
+    /// per debug_only flag set for this warning explicitly.
+    #[track_caller]
+    pub fn dbgwarn(&mut self, warning: impl Into<W>, debug_only: bool) {
         let site = Location::caller();
-        let tracked = TrackedWarning { warning: warning.into(), site, debug_only: self.debug_only };
+        let tracked = TrackedWarning { warning: warning.into(), site, debug_only };
         self.warnings.push(tracked);
+    }
+
+    /// adds a new messages to the underlying messages vector.
+    #[track_caller]
+    pub fn info(&mut self, message: impl Into<W>) {
+        self.dbginfo(message, self.debug_only)
+    }
+
+    /// sets the debug only flag for this particular info message.
+    #[track_caller]
+    pub fn dbginfo(&mut self, message: impl Into<W>, debug_only: bool) {
+        let site = Location::caller();
+        let tracked = TrackedWarning { warning: message.into(), site, debug_only };
+        self.messages.push(tracked);
     }
 
     /// Records a warning to be associated with this value.
@@ -918,6 +950,10 @@ impl<W: std::error::Error> Logger<W> for StdErrLogger {
     /// logs the given warning to stderr using yellow ascii text escapes.
     fn log(&self, warning: &W, location: &std::panic::Location) {
         eprintln!("\x1b[33m[Warning]: {}:{}:{} {}\x1b[0m", location.file(), location.line(), location.column(), warning);
+    }
+
+    fn info(&self, message: &W, location: &std::panic::Location) {
+        println!("\x1b[32m[Info]: {}:{}:{} {}\x1b[0m", location.file(), location.line(), location.column(), message);
     }
 }
 
