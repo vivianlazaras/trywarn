@@ -2,6 +2,9 @@
 name = "trywarn"
 version = "0.1.0"
 edition = "2024"
+description = "a Result like warning system, that allows warning propagation within the type system"
+license = "MIT"
+docs = "docs.rs"
 
 [dependencies]
 concat-idents = "1.1.5"
